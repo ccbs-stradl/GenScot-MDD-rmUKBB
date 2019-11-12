@@ -1,0 +1,164 @@
+---
+title: GWAS of MDD in Generation Scotland, unrelated subsample removing overlap with UK Biobank
+author: Mark Adams
+output:
+  html_document:
+    toc: TRUE
+    code_folding: "show"
+    df_print: kable
+---
+
+# Covariates
+
+Combine age/sex covariates with MDS components
+
+```{r}
+
+library(readr)
+library(dplyr)
+
+covars <- read_table2('plinkcovar.txt')
+
+pcs <- read_csv('HM3mds2R.mds.csv')
+
+all_covars <- pcs %>%
+inner_join(covars, by=c('FID'='famid', 'IID'='id')) %>%
+select(-SOL)
+
+write_delim(all_covars, 'GenScot_AgeSexPCs.cov', delim=' ')
+
+```
+
+# Removals
+
+Merge SMR+outliers and UKB overlap file
+
+```{r}
+
+outliers <- read_table2('SMR_Italian_Outliers_exclude.txt', col_names=c('FID', 'IID'))
+
+ukb_overlap <- read_table2('GSindividualsOverlappingWithUKB500K.txt', col_names=c('FID', 'IID'))
+
+all_removes <- 
+outliers %>%
+bind_rows(ukb_overlap) %>%
+distinct()
+
+write_delim(all_removes, 'SMR_Italian_Outliers_UKBoverlap.txt', col_names=F, delim=' ')
+
+```
+
+# Genotypes
+
+Check sample size with all inclusions and exclusions applied
+
+```{bash, eval=FALSE}
+
+plink \
+  --bfile QCdGS20K \
+  --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
+  --covar GenScot_AgeSexPCs.cov \
+  --keep QCdGS20K_unrelated_t0.025.fam \
+  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --freq case-control \
+  --maf 0.01 \
+  --out GenScot_MDD_rmUKBB \
+  --memory 3000
+
+plink \
+  --bfile QCdGS20K \
+  --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
+  --covar GenScot_AgeSexPCs.cov \
+  --keep QCdGS20K_unrelated_t0.025.fam \
+  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --maf 0.01 \
+  --logistic \
+  --out Genscot_MDD_rmUKBB \
+  --memory 3000
+
+
+```
+
+# Imputed
+
+## Case-control allele frequencies
+
+`GSrmUKBB.frq.sh`:
+
+```{bash, eval=FALSE}
+#$ -N GSrmUKBB.frq
+#$ -l h_rt=1:00:00
+#$ -l h_vmem=4G
+#$ -t 1-22
+#$ -cwd
+#$ -e logs
+#$ -o logs
+
+. /etc/profile.d/modules.sh
+module load igmm/apps/plink/1.90b4
+
+CHR=$SGE_TASK_ID
+
+plink \
+  --bfile GS20K_HRC_0.8_GCTA_${CHR} \
+  --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
+  --keep QCdGS20K_unrelated_t0.025.fam \
+  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --freq case-control \
+  --out GenScot_MDD_rmUKBB.HRC.${CHR} \
+  --memory 3000
+```
+
+```{bash,eval=FALSE}
+
+qsub GSrmUKBB.frq.sh
+
+```
+
+
+## Association analysis 
+
+`GSrmUKBB.assoc.sh`:
+
+```{bash, eval=FALSE}
+#$ -N GSrmUKBB.assoc
+#$ -l h_rt=1:00:00
+#$ -l h_vmem=4G
+#$ -t 1-22
+#$ -cwd
+#$ -e logs
+#$ -o logs
+
+. /etc/profile.d/modules.sh
+module load igmm/apps/plink/1.90b4
+
+CHR=$SGE_TASK_ID
+
+plink \
+  --bfile GS20K_HRC_0.8_GCTA_${CHR} \
+  --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
+  --covar GenScot_AgeSexPCs.cov \
+  --keep QCdGS20K_unrelated_t0.025.fam \
+  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --logistic \
+  --maf 0.01 \
+  --out GenScot_MDD_rmUKBB.HRC.${CHR} \
+  --memory 3000
+```
+
+```{bash,eval=FALSE}
+
+qsub GSrmUKBB.assoc.sh
+
+```
+
+## Daner file
+
+Open frequency and association results files
+```{r}
+
+freq <- bind_rows(plyr::llply(1:22, function(chr) read_table2(paste0('GenScot_MDD_rmUKBB.HRC.', chr, '.frq.cc'))))
+
+assoc <- bind_rows(plyr::llply(1:22, function(chr) read_table2(paste0('GenScot_MDD_rmUKBB.HRC.', chr, '.assoc.logistic'))))
+
+```
