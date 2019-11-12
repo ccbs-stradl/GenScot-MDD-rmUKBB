@@ -1,4 +1,12 @@
 *.cov
 *.txt
 *.csv
+*.bed
 *.fam
+*.bim
+*.irem
+*.nosex
+*.logistic
+*.cc
+*.log
+logs/*
