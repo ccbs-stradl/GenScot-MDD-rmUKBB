@@ -15,7 +15,7 @@ plink \
   --bfile GS20K_HRC_0.8_GCTA_${CHR} \
   --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
   --keep QCdGS20K_unrelated_t0.025.fam \
-  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --remove GSindividualsOverlappingWithUKB500K.txt \
   --freq case-control \
   --out GenScot_MDD_rmUKBB.HRC.${CHR} \
   --memory 3000

@@ -9,4 +9,5 @@
 *.logistic
 *.cc
 *.log
+*.gz
 logs/*

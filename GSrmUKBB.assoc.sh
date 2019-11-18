@@ -16,8 +16,9 @@ plink \
   --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
   --covar GenScot_AgeSexPCs.cov \
   --keep QCdGS20K_unrelated_t0.025.fam \
-  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --remove GSindividualsOverlappingWithUKB500K.txt \
   --logistic \
+  --ci 0.95 \
   --maf 0.01 \
   --out GenScot_MDD_rmUKBB.HRC.${CHR} \
   --memory 3000
