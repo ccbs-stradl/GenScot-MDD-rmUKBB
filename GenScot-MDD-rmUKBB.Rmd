@@ -8,6 +8,19 @@ output:
     df_print: kable
 ---
 
+# Setup
+
+Symlink genotype files into this directory. Set shell variable `GENSCOT` to the mountpoint of the HPC system holding copies of the data for compute:
+
+```{bash, eval=FALSE}
+
+ln -s ${GENSCOT}/genetics/genotypes/GS20K_PLINK_files/QCd_data/QCdGS20K.* .
+ln -s ${GENSCOT}/genetics/imputed/HRC/updated_bims/GS20K_HRC_0.8_GCTA_*.* .
+ln -s ${GENSCOT}/genetics/imputed/HRC/GS20K_HRC.INFO.gz .
+ 
+
+```
+
 # Covariates
 
 Combine age/sex covariates with MDS components
@@ -16,6 +29,7 @@ Combine age/sex covariates with MDS components
 
 library(readr)
 library(dplyr)
+library(stringr)
 
 covars <- read_table2('plinkcovar.txt')
 
@@ -29,25 +43,6 @@ write_delim(all_covars, 'GenScot_AgeSexPCs.cov', delim=' ')
 
 ```
 
-# Removals
-
-Merge SMR+outliers and UKB overlap file
-
-```{r}
-
-outliers <- read_table2('SMR_Italian_Outliers_exclude.txt', col_names=c('FID', 'IID'))
-
-ukb_overlap <- read_table2('GSindividualsOverlappingWithUKB500K.txt', col_names=c('FID', 'IID'))
-
-all_removes <- 
-outliers %>%
-bind_rows(ukb_overlap) %>%
-distinct()
-
-write_delim(all_removes, 'SMR_Italian_Outliers_UKBoverlap.txt', col_names=F, delim=' ')
-
-```
-
 # Genotypes
 
 Check sample size with all inclusions and exclusions applied
@@ -57,9 +52,8 @@ Check sample size with all inclusions and exclusions applied
 plink \
   --bfile QCdGS20K \
   --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
-  --covar GenScot_AgeSexPCs.cov \
   --keep QCdGS20K_unrelated_t0.025.fam \
-  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --remove GSindividualsOverlappingWithUKB500K.txt \
   --freq case-control \
   --maf 0.01 \
   --out GenScot_MDD_rmUKBB \
@@ -70,9 +64,10 @@ plink \
   --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
   --covar GenScot_AgeSexPCs.cov \
   --keep QCdGS20K_unrelated_t0.025.fam \
-  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --remove GSindividualsOverlappingWithUKB500K.txt \
   --maf 0.01 \
   --logistic \
+  --ci 0.95 \
   --out Genscot_MDD_rmUKBB \
   --memory 3000
 
@@ -103,7 +98,7 @@ plink \
   --bfile GS20K_HRC_0.8_GCTA_${CHR} \
   --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
   --keep QCdGS20K_unrelated_t0.025.fam \
-  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --remove GSindividualsOverlappingWithUKB500K.txt \
   --freq case-control \
   --out GenScot_MDD_rmUKBB.HRC.${CHR} \
   --memory 3000
@@ -139,8 +134,9 @@ plink \
   --pheno QCdGS20K_Pheno_dep_status_Unaff_b_only0_Aff_b_only1.txt \
   --covar GenScot_AgeSexPCs.cov \
   --keep QCdGS20K_unrelated_t0.025.fam \
-  --remove SMR_Italian_Outliers_UKBoverlap.txt \
+  --remove GSindividualsOverlappingWithUKB500K.txt \
   --logistic \
+  --ci 0.95 \
   --maf 0.01 \
   --out GenScot_MDD_rmUKBB.HRC.${CHR} \
   --memory 3000
@@ -154,11 +150,38 @@ qsub GSrmUKBB.assoc.sh
 
 ## Daner file
 
-Open frequency and association results files
-```{r}
+Open frequency and association results files. Convert to [daner](https://docs.google.com/document/d/1TWIhr8-qpCXB13WCXcU1_HDio8lC_MeWoAg2jlggrtU/edit) format
+
+```{r gs_rmukbb_assoc, cache=TRUE}
 
 freq <- bind_rows(plyr::llply(1:22, function(chr) read_table2(paste0('GenScot_MDD_rmUKBB.HRC.', chr, '.frq.cc'))))
 
 assoc <- bind_rows(plyr::llply(1:22, function(chr) read_table2(paste0('GenScot_MDD_rmUKBB.HRC.', chr, '.assoc.logistic'))))
+
+gs_bim <- read_table2('QCdGS20K.bim', col_names=c('CHR', 'SNP', 'CM', 'BP', 'A1', 'A2'))
+
+hrc_info <- read_table2('GS20K_HRC.INFO.gz')
+
+```
+
+```{r}
+
+# SNPs that are directly genotyped
+genotyped <- gs_bim %>%
+transmute(CHR, SNP, ngt=1)
+
+sumstats <- 
+assoc %>%
+filter(TEST == 'ADD') %>%
+filter(str_detect(SNP, 'rs')) %>%
+left_join(freq, by=c('CHR', 'SNP', 'A1')) %>%
+left_join(genotyped, by=c('CHR', 'SNP')) %>%
+left_join(hrc_info, by=c('CHR'='CHROM', 'BP'='POS')) %>%
+mutate(ngt=if_else(ngt %in% 1, true=1, false=0)) %>%
+select(CHR, SNP, BP, A1, A2, FRQ_A_951=MAF_A, FRQ_U_6114=MAF_U,
+       INFO, OR, SE, P, ngt) %>%
+filter(!is.na(INFO) & FRQ_U_6114 >= 0.01 & FRQ_A_951 > 0.01)
+
+write_tsv(sumstats, 'daner_mdd_genscot_1119a_rmUKBB.gz')
 
 ```
