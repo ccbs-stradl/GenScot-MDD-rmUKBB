@@ -182,6 +182,6 @@ select(CHR, SNP, BP, A1, A2, FRQ_A_951=MAF_A, FRQ_U_6114=MAF_U,
        INFO, OR, SE, P, ngt) %>%
 filter(!is.na(INFO) & FRQ_U_6114 >= 0.01 & FRQ_A_951 > 0.01)
 
-write_tsv(sumstats, 'daner_mdd_genscot_1119a_rmUKBB.gz')
+write_tsv(sumstats, 'daner_mdd_genscot_2019-11a_rmUKBB.gz')
 
 ```
