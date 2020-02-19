@@ -21,7 +21,8 @@ List and load alignments files. The document suggests pulling from files with th
 eur_bim_files <- 
 list.files('/home/gwas/pgc-samples/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/', pattern="my.ALL_1000G_phase1integrated_v3_aug2012_macGT1_chr.+\\.eur\\.bfile\\.bim", full.names=TRUE)
 
-eur_bim <- bind_rows(lapply(eur_bim_flies, read_table2, col_names=c('CHR', 'snpid', 'CM', 'BP', 'A1', 'A2'), col_types='iciicc'))
+# specify column times i=integer, c=character
+eur_bim <- bind_rows(lapply(eur_bim_files, read_table2, col_names=c('CHR', 'snpid', 'CM', 'BP', 'A1', 'A2'), col_types='iciicc'))
 
 ```
 
