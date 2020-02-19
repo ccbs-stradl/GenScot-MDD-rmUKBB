@@ -1,0 +1,77 @@
+---
+title: Align sumstats with RICOPILI pipeline
+author: Mark Adams
+---
+
+Sumstats from Generation Scotland need to be [aligned with the PGC imputation panel](https://docs.google.com/document/d/1o4bN_uLK4IEItXCSdeQkXfZwEpLuSCWlveJevRogi08/) (1KG).  
+
+```{r}
+
+library(readr)
+library(dplyr)
+
+daner <- read_tsv('daner_mdd_genscot_1119a_rmUKBB.gz')
+
+```
+
+List and load alignments files. The document suggests pulling from files with the suffix `*.EUR.frq2.gz` but these do not exist for the circa 2012 imputation files that were used for **MDD2**, so instead we open the `*.eur.bfile.bim` files.
+
+```{r}
+
+eur_bim_files <- 
+list.files('/home/gwas/pgc-samples/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/', pattern="my.ALL_1000G_phase1integrated_v3_aug2012_macGT1_chr.+\\.eur\\.bfile\\.bim", full.names=TRUE)
+
+eur_bim <- bind_rows(lapply(eur_bim_flies, read_table2, col_names=c('CHR', 'snpid', 'CM', 'BP', 'A1', 'A2'), col_types='iciicc'))
+
+```
+
+Merge sumstats on CPIDs `CHR_POS_A1_A2` and `CHR_POS_A2_A1` 
+
+```{r}
+
+daner_cpid <-
+bind_rows(
+daner %>% 
+  inner_join(eur_bim, by=c('CHR'='CHR', 'BP'='BP', 'A1'='A1', 'A2'='A2')),
+daner %>% 
+  inner_join(eur_bim, by=c('CHR'='CHR', 'BP'='BP', 'A1'='A2', 'A2'='A1'))
+)
+
+```
+
+Number of sites with differerent RSIDs
+```{r}
+
+daner_cpid %>%
+filter(SNP != snpid) %>%
+tally()
+
+```
+
+Unmatched sites
+
+```{r}
+
+daner_cpid_nomatch <-
+daner %>%
+anti_join(daner_cpid, by=c('CHR', 'SNP'))
+
+```
+
+Update SNP ID
+
+```{r}
+
+daner_aligned <-
+daner_cpid %>%
+select(CHR, SNP=snpid, BP, A1, A2, starts_with('FRQ'), INFO, OR, SE, P, ngt) %>%
+bind_rows(daner_cpid_nomatch) %>%
+arrange(CHR, BP)
+
+```
+
+```{r}
+
+write_tsv(daner_aligned, 'daner_mdd_genscot_1119a_rmUKBB.aligned.gz')
+
+```
