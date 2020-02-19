@@ -152,11 +152,15 @@ qsub GSrmUKBB.assoc.sh
 
 Open frequency and association results files. Convert to [daner](https://docs.google.com/document/d/1TWIhr8-qpCXB13WCXcU1_HDio8lC_MeWoAg2jlggrtU/edit) format
 
-```{r gs_rmukbb_assoc, cache=TRUE}
+```{r gs_rmukbb_assoc}
 
 freq <- bind_rows(plyr::llply(1:22, function(chr) read_table2(paste0('GenScot_MDD_rmUKBB.HRC.', chr, '.frq.cc'))))
 
 assoc <- bind_rows(plyr::llply(1:22, function(chr) read_table2(paste0('GenScot_MDD_rmUKBB.HRC.', chr, '.assoc.logistic'))))
+
+```
+
+```{r gs_rmukbb_info}
 
 gs_bim <- read_table2('QCdGS20K.bim', col_names=c('CHR', 'SNP', 'CM', 'BP', 'A1', 'A2'))
 
